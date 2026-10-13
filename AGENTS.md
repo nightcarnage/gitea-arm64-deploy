@@ -137,6 +137,38 @@ valuable part of the file.
 
 ---
 
+## Publishing: this repo has two remotes, and they are not equivalent
+
+| Remote | Where | Visibility |
+|---|---|---|
+| `origin` | local Gitea, `http://localhost:3000/doom/gitea-arm64-deploy.git` | private, this machine only |
+| `github` | `https://github.com/nightcarnage/gitea-arm64-deploy.git` | **PUBLIC** |
+
+**Before pushing to `github`, assume everything you send becomes public — history
+included.** `git push --tags` sends the entire history, not just the current files, so a
+secret that was removed in a later commit is still readable in the earlier one.
+
+This has already happened once here. `docs/backup-and-restore.md` briefly contained a local
+Gitea password, an email address and a Windows username. The working file was scrubbed —
+but the secret stayed reachable in tags `r2` and `r3`. Fixing it required rewriting history
+with `filter-branch`, expiring reflogs, `gc --prune=now`, and force-pushing to **both**
+remotes.
+
+Rules that follow from that:
+
+- **Never put a real credential in a tracked file, even as an "example".** Use a
+  placeholder like `<password>`. Placeholders are also better documentation.
+- **Scan before publishing.** `git grep -n -i -e '<password>' -e '<email>' -e '<user>' -- .`
+  and remember the scan only covers the working tree, not history.
+- **Prefer `git push github main` over `--tags`** unless tags actually changed.
+- If you do publish a secret, **rotate the credential** — that is the real fix. Rewriting
+  history only removes it from this repository; clones, caches and mirrors may still hold it.
+- Force-pushing is normally forbidden here (see the revision discipline below). The one
+  legitimate exception is removing a secret from history, and even then only after checking
+  that nothing unique would be destroyed.
+
+---
+
 ## Revision discipline
 
 Revisions are tagged `r1`, `r2`, `r3`, … and pushed. Commit, tag, push at the end of a
