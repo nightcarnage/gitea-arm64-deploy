@@ -110,10 +110,26 @@ distinction visible rather than letting it blur into a general "verified" claim.
 ```
 compose.yaml          server definition; every setting carries its reason in a comment
 .env.example          template -> .env (gitignored)
-scripts/              Inspect-Environment.ps1, Deploy-Gitea.ps1, New-Project.ps1, Backup-Gitea.ps1
-templates/            AGENTS.md, Save-Revision.*, gitignore.default, gitattributes.default
-docs/                 troubleshooting.md, backup-and-restore.md, arm64-notes.md, codex-integration.md
+scripts/              Inspect-Environment, Deploy-Gitea, New-Project, Backup-Gitea, Get-MachineProfile
+templates/            AGENTS.md, Save-Revision.*, gitignore.default, gitattributes.default, PROFILE.md
+docs/                 troubleshooting.md, backup-and-restore.md, interview.md,
+                      arm64-notes.md, codex-integration.md
+profiles/             one filled-in profile per client (see profiles/README.md)
 ```
+
+## Starting with a new person
+
+The scripts encode assumptions. Before trusting them, find out which are wrong:
+
+```
+1. .\scripts\Get-MachineProfile.ps1 -ScanProjects -OutFile .\profiles\<client>-machine.md
+2. Read docs\interview.md and conduct the interview (batches of 5-7 questions)
+3. Copy-Item .\templates\PROFILE.md .\profiles\<client>.md, fill it in
+4. THEN run Deploy-Gitea.ps1 and New-Project.ps1, adjusted to the answers
+```
+
+Step 3 produces a change list. If the interview did not change any setting, either the
+assumptions were right or the questions were not good enough — decide which.
 
 When adding a `compose.yaml` setting, put the **why** in a comment above it. Every
 non-obvious line here exists because a default was wrong, and that reason is the most

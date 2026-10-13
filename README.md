@@ -43,6 +43,39 @@ copies, force-pushing, committing a build cache — unless it is told otherwise.
 
 ---
 
+## Start here: profile before you deploy
+
+These scripts encode **our** assumptions. On a pilot, some of them will be wrong, and
+finding out afterwards is expensive.
+
+```powershell
+# 1. machine facts - never ask a person what a command can answer
+.\scripts\Get-MachineProfile.ps1 -ScanProjects -OutFile .\profiles\<client>-machine.md
+
+# 2. read docs/interview.md, then talk to the person in batches of 5-7 questions
+
+# 3. record it
+Copy-Item .\templates\PROFILE.md .\profiles\<client>.md
+
+# 4. only now deploy, adjusted to the answers
+```
+
+The split matters: **detect machine facts, ask about intent.** `Get-MachineProfile` covers
+OS, architecture, CPU/RAM/disk, WSL, Docker, git, LFS, Codex state, installed creative
+tools, cloud-sync status, reserved ports, and existing repos. None of that should ever be a
+question to a non-programmer.
+
+The interview covers what a command cannot know — where the files really live, who else
+needs access, how they recover a broken version today, and what would make this worth it.
+It ends with a **change list**: every answer that altered a setting. An interview that
+changes nothing was either unnecessary or badly asked.
+
+Notably, it asks **where the project files live**, because a git repository inside a
+cloud-synced folder (OneDrive, Dropbox) is a known way to corrupt both — and that is not
+something a client will volunteer.
+
+---
+
 ## Requirements
 
 Windows 11 (or 10), plus:
@@ -196,6 +229,7 @@ compose.yaml          the server. Every setting has its reason in a comment
 .env.example          ports, timezone, admin credentials -> copy to .env
 scripts/
   Inspect-Environment.ps1   read-only preflight; exits 1 if anything is actually broken
+  Get-MachineProfile.ps1    read-only report of everything the scripts assume about this PC
   Deploy-Gitea.ps1          start the server, create the admin, issue a token
   New-Project.ps1           put a folder under version control, initialised and pushed
   Backup-Gitea.ps1          verify-and-prune backup, into OneDrive by default
@@ -204,11 +238,14 @@ templates/
   Save-Revision.ps1 / .bat  the revision button
   gitignore.default         sane defaults, including secrets and build caches
   gitattributes.default     Git LFS rules and line-ending policy
+  PROFILE.md                the filled-in record of an interview
 docs/
+  interview.md              how to find out what this person actually needs
   troubleshooting.md        real failures, real causes
   backup-and-restore.md     where the data lives, and a tested restore procedure
   arm64-notes.md            Windows on Arm specifics
   codex-integration.md      how Codex discovers the rules
+profiles/                   one filled-in profile per client
 ```
 
 ---
