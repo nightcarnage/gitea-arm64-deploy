@@ -241,6 +241,77 @@ the folder and multiple copies can coexist.
 
 ---
 
+## Backups and OneDrive
+
+### "Where is the database? I cannot find it on disk"
+
+You will not. Three layers:
+
+| Layer | Path |
+|---|---|
+| Container | `/data/gitea/gitea.db` |
+| Docker volume | `gitea_gitea-data` → `/var/lib/docker/volumes/gitea_gitea-data/_data` (inside the Docker VM only) |
+| Windows | `%LOCALAPPDATA%\Docker\wsl\disk\docker_data.vhdx` — a multi-GB disk holding **all** of Docker's data |
+
+`docker volume inspect` prints a path that exists only inside the VM. There is no folder
+to browse or copy. Back up with `scripts\Backup-Gitea.ps1`, not with Explorer.
+
+### I copied the database file / the VHDX and the backup will not open
+
+A **live** SQLite file copied mid-write is often torn and unopenable — SQLite relies on
+locking and write ordering, which a file copy does not respect. Copying the VHDX while
+Docker runs has the same problem, at a larger scale.
+
+Use `gitea dump` (which is what the backup script calls). It takes a consistent snapshot
+and produces a single self-contained archive.
+
+### The backup ran but nothing uploaded
+
+Check whether OneDrive is running:
+
+```powershell
+Get-Process OneDrive
+```
+
+No output means nothing is syncing, no matter how the folder looks. Files written into
+`%USERPROFILE%\OneDrive` upload only while OneDrive runs. Start it and sign in.
+
+`Backup-Gitea.ps1` warns about this specifically, rather than reporting success.
+
+### "Is my Desktop backed up?"
+
+Probably not — and the folder *looks* like it is.
+
+```powershell
+$usf = 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+(Get-ItemProperty $usf).Desktop
+```
+
+If that prints `C:\Users\<you>\Desktop`, then the Desktop is **not** in OneDrive. Known
+Folder Move is off, and only Pictures typically points into OneDrive.
+
+Watch for this trap in particular: `C:\Users\<you>\OneDrive\Desktop` may exist as a
+**link pointing back out** to the real Desktop. A link into a sync folder does not upload
+its target. It looks exactly like a backup and provides none.
+
+To enable it properly: OneDrive **Settings → Sync and backup → Manage backup** → turn on
+Desktop/Documents. That is a deliberate, visible change, not something to do as a side
+effect.
+
+### A backup archive contains no repositories
+
+Look under **`repos/`**, not `repositories/`:
+
+```
+app.ini   data/gitea.db   gitea-db.sql   data/lfs/...   repos/<owner>/<repo>.git/
+```
+
+If you are writing a restore script and copy with a wildcard (`Copy-Item repos\* ...`),
+the owner folder can be **flattened**, and Gitea will then find no repositories at all.
+Copy the folders themselves, or use `robocopy /E`.
+
+---
+
 ## Codex
 
 ### The agent ignores the project rules

@@ -56,6 +56,22 @@ Do not quietly upgrade a caveat into a guarantee.
 Both are in `.gitignore`. If you ever find one staged, stop and remove it — and treat the
 token as compromised, because it has been written to disk in a commit.
 
+A backup archive also contains secrets: `app.ini` holds `LFS_JWT_SECRET` and similar.
+Never commit a backup into the repository, and never puzzle over why `data/jwt/private.pem`
+is in one.
+
+### Backups: never copy the live files
+
+The database is inside a Docker volume, inside `docker_data.vhdx`, which holds all of
+Docker's data. There is no folder to copy, and a live SQLite file copied mid-write can be
+torn. Use `gitea dump` via `scripts\Backup-Gitea.ps1`, which takes a consistent snapshot
+and verifies the result contains repositories before keeping it.
+
+If you touch the backup or restore path, **prove the round trip**: restore into a scratch
+instance on spare ports and confirm the revision tags come back. A backup that has never
+been restored is an untested assumption, and this one has been restored once already — do
+not regress that.
+
 ### Prefer the boring, verifiable approach
 
 - PowerShell 5.1 compatibility. This must run on stock Windows, not only on PowerShell 7.
@@ -94,9 +110,9 @@ distinction visible rather than letting it blur into a general "verified" claim.
 ```
 compose.yaml          server definition; every setting carries its reason in a comment
 .env.example          template -> .env (gitignored)
-scripts/              Inspect-Environment.ps1, Deploy-Gitea.ps1, New-Project.ps1
+scripts/              Inspect-Environment.ps1, Deploy-Gitea.ps1, New-Project.ps1, Backup-Gitea.ps1
 templates/            AGENTS.md, Save-Revision.*, gitignore.default, gitattributes.default
-docs/                 troubleshooting.md, arm64-notes.md, codex-integration.md
+docs/                 troubleshooting.md, backup-and-restore.md, arm64-notes.md, codex-integration.md
 ```
 
 When adding a `compose.yaml` setting, put the **why** in a comment above it. Every

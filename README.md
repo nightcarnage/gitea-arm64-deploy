@@ -115,6 +115,32 @@ docker compose down -v         # stop  (DELETES EVERY REPOSITORY)
 
 ---
 
+## Backing up
+
+```powershell
+.\scripts\Backup-Gitea.ps1
+```
+
+Writes one archive into a OneDrive folder by default, containing **the database, every
+repository with full history, every Git LFS object, and the configuration**. Verifies the
+archive really contains your code before keeping it, and prunes old copies.
+
+Runs in about **0.4 seconds** on the reference instance. The round trip was tested: the
+dump was **restored into a scratch instance** and the revision tags `r1`, `r2`, `r3` came
+back with matching commit SHAs.
+
+**Read [docs/backup-and-restore.md](docs/backup-and-restore.md) before relying on this.**
+Two things there are easy to get wrong:
+
+- Do **not** try to keep the live database in OneDrive. It lives inside a Docker volume,
+  inside a multi-GB virtual disk, and syncing a live SQLite file risks corruption — and a
+  database contains no code anyway.
+- On this machine OneDrive was **installed but not running**, and **Known Folder Move is
+  off** — so Desktop and Documents are *not* being backed up. That matters if projects
+  live on the Desktop.
+
+---
+
 ## Windows on Arm
 
 `gitea/gitea:1` is a multi-arch image. Verified with:
@@ -172,6 +198,7 @@ scripts/
   Inspect-Environment.ps1   read-only preflight; exits 1 if anything is actually broken
   Deploy-Gitea.ps1          start the server, create the admin, issue a token
   New-Project.ps1           put a folder under version control, initialised and pushed
+  Backup-Gitea.ps1          verify-and-prune backup, into OneDrive by default
 templates/
   AGENTS.md                 the agent contract, installed into new projects
   Save-Revision.ps1 / .bat  the revision button
@@ -179,6 +206,7 @@ templates/
   gitattributes.default     Git LFS rules and line-ending policy
 docs/
   troubleshooting.md        real failures, real causes
+  backup-and-restore.md     where the data lives, and a tested restore procedure
   arm64-notes.md            Windows on Arm specifics
   codex-integration.md      how Codex discovers the rules
 ```
@@ -196,6 +224,12 @@ Everything in `scripts/` was executed, not just written:
   times** against the same folder: still exactly **one commit**, clean tree, one tag.
 - `Inspect-Environment.ps1` — reports 0 warnings on a healthy machine, correctly **fails**
   on a port inside a reserved range, and correctly parses `wsl.exe`'s UTF-16 output.
+- `Backup-Gitea.ps1` — dump, archive verification, pruning (3 stale backups correctly
+  removed at `-Keep 2`) and the OneDrive upload check. Then the **restore was performed and
+  verified**: dump → mirror of `/data` → `docker compose create` → `docker cp` →
+  `up -d`, on ports 3400/3422. A credential from the restored database authenticated, all
+  4 repositories were listed, and `git ls-remote` returned `refs/tags/r1`, `r2`, `r3` with
+  SHAs matching the live instance. Torn down afterwards.
 
 **Caveat, stated plainly:** the deployment was validated on **x64** Windows 10 with Docker
 Desktop 29.8.2. The arm64 support claim rests on the published multi-arch image manifest
