@@ -1,0 +1,26 @@
+# Credentials and machine-specific state must never be committed.
+
+# Admin password, ports, timezone. Copy .env.example -> .env.
+.env
+.env.local
+
+# A live API token with full scope. Written by scripts\Deploy-Gitea.ps1.
+.gitea-token
+
+# --- scratch ---------------------------------------------------------------
+_scratch/
+tmp/
+*.tmp
+*.bak
+*~
+
+# --- logs ------------------------------------------------------------------
+*.log
+logs/
+
+# --- OS and editor ---------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/

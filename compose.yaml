@@ -1,0 +1,79 @@
+# Gitea, self-hosted, for a single Windows workstation.
+#
+# Every setting here exists because the default is wrong for this use case; the
+# reason is on the line above each one. Do not remove them casually.
+#
+# Ark: `gitea/gitea:1` is a multi-arch image. Verified with
+#   docker manifest inspect gitea/gitea:1
+# which publishes linux/amd64, linux/arm64 and linux/riscv64. So on Windows on
+# Arm this runs natively - no x64 emulation, no performance penalty.
+#
+# Ports come from .env so this file never needs editing.
+
+services:
+  gitea:
+    image: gitea/gitea:1
+    # No container_name on purpose: Compose derives it from the folder name, so a
+    # second checkout (a test instance, or a second project) does not collide with
+    # this one. Commands use `docker compose exec`, which does not need a fixed name.
+    restart: unless-stopped
+
+    environment:
+      # The container writes /data as uid 1000. Keeping this explicit avoids
+      # permission surprises on Windows bind mounts.
+      USER_UID: "1000"
+      USER_GID: "1000"
+
+      TZ: ${TZ:-UTC}
+
+      # Single-user workstation: SQLite needs no separate database container.
+      GITEA__database__DB_TYPE: sqlite3
+
+      # Skip the browser install wizard. Without this, Gitea serves an
+      # installation page on first run and the API is unusable until it is
+      # completed by hand - which breaks unattended deployment.
+      GITEA__security__INSTALL_LOCK: "true"
+
+      # Gitea ships app.ini with LFS_START_SERVER = false. With that default,
+      # every Git LFS upload fails with a 404 on /info/lfs/objects/batch, and
+      # large binaries (.psd, .fbx, .wav, .wad, Unity assets) cannot be pushed.
+      GITEA__server__LFS_START_SERVER: "true"
+
+      # Gitea's default minimum password length is 8. Lowered to 6 so simple
+      # local passwords are usable. Raise this if the server is ever exposed.
+      GITEA__security__MIN_PASSWORD_LENGTH: "6"
+
+      # Local-only addressing. ROOT_URL must match the published port or the
+      # generated clone URLs point at the wrong place.
+      GITEA__server__DOMAIN: localhost
+      GITEA__server__ROOT_URL: http://localhost:${HTTP_PORT:-3000}/
+      GITEA__server__SSH_DOMAIN: localhost
+      GITEA__server__SSH_PORT: "${SSH_PORT:-3022}"
+      GITEA__server__SSH_LISTEN_PORT: "22"
+
+      GITEA__repository__DEFAULT_BRANCH: main
+
+      # Local instance with no mail server: quiet the registration/notification
+      # paths that would otherwise error on every action.
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__mailer__ENABLED: "false"
+
+    ports:
+      # NOTE ON THE SSH PORT. Windows reserves blocks of TCP ports for Hyper-V
+      # and WSL. Binding inside a reserved block fails with a misleading
+      # "access permissions" error even when nothing is listening. On the
+      # machine this was written for, ports 2007-2306 are reserved, which is why
+      # the default here is 3022 rather than the usual 2222.
+      #
+      # Check before changing it:
+      #   netsh interface ipv4 show excludedportrange protocol=tcp
+      - "${HTTP_PORT:-3000}:3000"
+      - "${SSH_PORT:-3022}:22"
+
+    volumes:
+      # One named volume holds the database, repositories and LFS objects.
+      # `docker compose down` keeps it; `down -v` destroys it.
+      - gitea-data:/data
+
+volumes:
+  gitea-data:

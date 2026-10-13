@@ -1,0 +1,204 @@
+# Self-hosted Gitea for Windows (including Windows on Arm) — set up for AI agents
+
+A small, complete kit for putting a workstation's projects under version control on a
+**local** Gitea server running in Docker Desktop, configured so that an AI agent
+(**OpenAI Codex on Windows**) knows the rules without being told each time.
+
+No cloud account. No subscription. Nothing leaves the machine.
+
+---
+
+## What you get
+
+| | |
+|---|---|
+| A private Git server | <http://localhost:3000>, in Docker Desktop |
+| One-command deploy | `scripts\Deploy-Gitea.ps1` — start, wait for health, create the admin, issue an API token |
+| One-command project setup | `scripts\New-Project.ps1` — put a folder under version control, wired up and pushed |
+| A preflight check | `scripts\Inspect-Environment.ps1` — read-only; says exactly what is missing |
+| An agent contract | `templates\AGENTS.md` — the rules the agent follows, installed into each project |
+| Large-file support | Git LFS, enabled and **verified end-to-end** |
+| One-button revisions | `Save-Revision.bat` — commit, tag `r<N>`, push |
+
+---
+
+## The idea
+
+People who do not program do not want to learn Git. They want **revisions**: named points
+they can return to, without a desktop littered with `project-2`, `project-final` and
+`project-final-FINAL`.
+
+So the flow is deliberately two commands:
+
+```powershell
+.\scripts\Save-Revision.bat          # a button, for the person
+.\scripts\Save-Revision.ps1 "text"   # the same thing, described, for the agent
+```
+
+Both commit, tag the next revision number, and push. `r1`, `r2`, `r3`, … forever.
+
+The other half is `AGENTS.md`. An AI agent will happily invent its own workflow — making
+copies, force-pushing, committing a build cache — unless it is told otherwise. A short
+`AGENTS.md` in the project root is how the rules travel with the project.
+
+---
+
+## Requirements
+
+Windows 11 (or 10), plus:
+
+| Requirement | Why | Check |
+|---|---|---|
+| Docker Desktop | runs the server | `docker version` |
+| WSL2 | Docker Desktop's engine backend | `wsl --version` |
+| Virtual Machine Platform | required by WSL2 | `Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform` |
+| Git + Git LFS | version control and large files | `git lfs version` |
+| Codex (optional) | the agent this is set up for | `%USERPROFILE%\.codex\` |
+
+Run this first. It changes nothing and tells you precisely what is missing:
+
+```powershell
+.\scripts\Inspect-Environment.ps1
+```
+
+It checks architecture, WSL, virtualisation, Docker, git, LFS, Codex, whether your chosen
+ports are usable, and free disk — and it names the **reserved port range** when Windows
+would refuse to bind a port.
+
+---
+
+## Quick start
+
+```powershell
+# 1. Put the server up
+.\scripts\Deploy-Gitea.ps1
+
+# 2. Put a project under version control
+.\scripts\New-Project.ps1 -Name MyProject
+
+# 3. From then on, save revisions
+cd ~\source\repos\MyProject
+.\scripts\Save-Revision.bat
+```
+
+`Deploy-Gitea.ps1` is **idempotent** — run it as often as you like. It will not duplicate
+the admin user or destroy data. It finishes by printing the URLs and credentials, and it
+saves an API token to `.gitea-token` (gitignored).
+
+To move a NON-default port, copy `.env.example` to `.env` and edit it. Compose reads it
+automatically:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+---
+
+## Daily use
+
+```powershell
+# what changed?
+git log --oneline --decorate
+git show                       # exactly what the last revision changed
+
+# go back and look, without losing anything
+git switch --detach r3
+git switch main                # return
+
+# the server
+docker compose up -d           # start
+docker compose ps              # status
+docker compose logs -f         # live logs
+docker compose down            # stop  (DATA IS KEPT)
+docker compose down -v         # stop  (DELETES EVERY REPOSITORY)
+```
+
+---
+
+## Windows on Arm
+
+`gitea/gitea:1` is a multi-arch image. Verified with:
+
+```powershell
+docker manifest inspect gitea/gitea:1
+```
+
+which publishes `linux/amd64`, **`linux/arm64`** and `linux/riscv64`. On Windows on Arm
+this therefore runs as a **native Arm64 container — no x64 emulation**, no translation
+penalty. See [docs/arm64-notes.md](docs/arm64-notes.md).
+
+---
+
+## How the agent knows the rules
+
+Two files, both named `AGENTS.md`:
+
+| Location | Scope |
+|---|---|
+| `%USERPROFILE%\.codex\AGENTS.md` | Every session on the machine — the index. Projects, server, credentials, pitfalls. |
+| `<project>\AGENTS.md` | That project only — how to work on it, how to verify it. |
+
+An **empty** `AGENTS.md` is the commonest mistake: the file exists, so it looks
+configured, and it teaches nothing. `Inspect-Environment.ps1` reports the byte count.
+
+See [docs/codex-integration.md](docs/codex-integration.md).
+
+---
+
+## Troubleshooting
+
+[docs/troubleshooting.md](docs/troubleshooting.md) — written from failures that actually
+happened, each with its real cause. The ones worth knowing about up front:
+
+- **"WSL update required"** — Docker's precondition test reads `wsl.exe --version`; an old
+  binary makes it refuse to start its engine even though WSL works. `wsl --update`, then
+  **fully restart Docker Desktop**.
+- **A port that will not bind, with an "access permissions" error** — it is inside a range
+  Windows reserved for Hyper-V/WSL. `netsh interface ipv4 show excludedportrange protocol=tcp`.
+  Port 2222 is the usual victim, which is why SSH is on **3022** here.
+- **Every Git LFS push returns 404** — Gitea ships `LFS_START_SERVER = false`.
+- **A folder is missing from the repository** — Git cannot track an empty folder.
+- **A script dies on Docker's output** — `$ErrorActionPreference = 'Stop'` plus `2>&1`
+  turns ordinary stderr progress into a terminating error.
+
+---
+
+## Layout
+
+```
+compose.yaml          the server. Every setting has its reason in a comment
+.env.example          ports, timezone, admin credentials -> copy to .env
+scripts/
+  Inspect-Environment.ps1   read-only preflight; exits 1 if anything is actually broken
+  Deploy-Gitea.ps1          start the server, create the admin, issue a token
+  New-Project.ps1           put a folder under version control, initialised and pushed
+templates/
+  AGENTS.md                 the agent contract, installed into new projects
+  Save-Revision.ps1 / .bat  the revision button
+  gitignore.default         sane defaults, including secrets and build caches
+  gitattributes.default     Git LFS rules and line-ending policy
+docs/
+  troubleshooting.md        real failures, real causes
+  arm64-notes.md            Windows on Arm specifics
+  codex-integration.md      how Codex discovers the rules
+```
+
+---
+
+## Verified
+
+Everything in `scripts/` was executed, not just written:
+
+- `Deploy-Gitea.ps1` — deployed to isolated ports (3300/3222), API answered, admin created,
+  **token authenticated against the API as an admin**, then torn down. Re-run confirmed
+  idempotent: one user, no duplicates.
+- `New-Project.ps1` — created a real repository on the server and pushed `r1`. Run **three
+  times** against the same folder: still exactly **one commit**, clean tree, one tag.
+- `Inspect-Environment.ps1` — reports 0 warnings on a healthy machine, correctly **fails**
+  on a port inside a reserved range, and correctly parses `wsl.exe`'s UTF-16 output.
+
+**Caveat, stated plainly:** the deployment was validated on **x64** Windows 10 with Docker
+Desktop 29.8.2. The arm64 support claim rests on the published multi-arch image manifest
+and on Docker Desktop's documented Arm64 build, **not** on a run on Arm hardware. The
+scripts are architecture-agnostic — `Inspect-Environment.ps1` will tell you which
+architecture your engine is really running.

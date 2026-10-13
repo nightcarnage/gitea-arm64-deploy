@@ -1,0 +1,43 @@
+# Default .gitignore for a new project.
+#
+# Covers the broad, safe cases only. Add project-specific rules at the bottom.
+# For a Unity project, prefer `unity vcs doctor --fix`, which generates the full
+# Unity-specific file from the editor's own knowledge - see docs.
+#
+# A note worth remembering: Git cannot track an EMPTY folder. An empty directory
+# never appears on the remote and is not created by a clone. Put a .gitkeep or a
+# README.md inside any folder that must exist.
+
+# --- editor and OS cruft ---------------------------------------------------
+.vscode/
+.idea/
+.vs/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- scratch and backups ---------------------------------------------------
+# (the whole point of this setup is that these should not be needed)
+*.bak
+*.orig
+*.tmp
+*.temp
+_scratch/
+tmp/
+
+# --- logs ------------------------------------------------------------------
+*.log
+logs/
+
+# --- secrets ---------------------------------------------------------------
+# Never commit credentials.
+.env
+.env.local
+*.pem
+*.key
+secrets/
+
+# --- project-specific ------------------------------------------------------
+# Add yours below.
